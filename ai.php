@@ -1,17 +1,15 @@
 <?php
 
+function dbg($msg) {
+    if(isset($_REQUEST['debug'])) {
+        echo $msg . '<br/>';
+    }
+}
 
 class ai
 {
     //0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    static $testboard =  [
-        0, 1, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0,
-    ];
+    static $testboard = [[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,1],[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,2]];
 
     public $gamestate;
     public $board = [];
@@ -22,29 +20,49 @@ class ai
 
     private function get_gamestate() {
         if(!empty($_REQUEST['gamestate'])) {
-            if(is_array($_REQUEST['gamestate'])) {
-                $this->gamestate = $_REQUEST['gamestate'];
-            } else {
-                $this->gamestate = static::$testboard;
-            }
+            dbg('gamestate request set as ' . $_REQUEST['gamestate']);
+            $this->gamestate = $_REQUEST['gamestate'];
         } else {
-            //die('cannot find game state');
+            dbg('gamestate not set');
+            $this->gamestate = static::$testboard;
         }
         if(!empty($_REQUEST['player'])) {
             $this->player = $_REQUEST['player'];
         } else {
-            //die('cannot find player id');
+            $this->player = $this->calculate_player();
         }
+        dbg('is player ' . $this->player);
+    }
+
+    private function calculate_player() {
+        $p1 = 0;
+        $p2 = 0;
+        for ($c = 0; $c < 7; $c++) {
+            for ($r = 0; $r < 6; $r++) {
+                $val = (int)$this->gamestate[$c][$r];
+                if($val == 1) $p1++;
+                else if($val == 2) $p2++;
+            }
+        }
+        if($p1 > $p2) return 2;
+        else return 1;
     }
 
     private function parse_gamestate() {
-        $h = 0;
-        for ($i = 0; $i < 6; $i++) {
-            for ($j = 0; $j < 7; $j++) {
-                $this->board[$i][$j] = $this->gamestate[$h];
-                $h++;
+        $gs = $this->gamestate;
+
+        $gs = trim($gs, '[]');
+        dbg('parsed:' .$gs);
+        $cols = explode('],[', $gs);
+        $result = [];
+        foreach ($cols as $c => $col) {
+            $rows = explode(',', $col);
+            foreach ($rows as $r => $val) {
+                $result[(int)$c][(int)$r] = (int)$val;
             }
         }
+        dbg('result:<pre>' . print_r($result, 'r') . '</pre>');
+        $this->board = $result;
     }
 
     private function set_gamestate() {
@@ -63,33 +81,63 @@ class ai
     }
 
     private function return_move() {
-        echo array_keys($this->valid_moves)[rand(0,count($this->valid_moves)-1)];
+        dbg('valid moves<pre>' . print_r($this->valid_moves, 'r') . '</pre>');
+        $rand = rand(0,count($this->valid_moves)-1);
+        dbg('random number:' . $rand);
+        $valid_moves = array_keys($this->valid_moves);
+        dbg('valid moves key<pre>' . print_r($valid_moves, 'r') . '</pre>');
+        dbg('valid_moves:' . implode(',', $valid_moves));
+        echo array_keys($this->valid_moves)[$rand];
     }
 
     private function visualise_board() {
-        echo 'Player ' . $this->player;
-        echo '<table>';
-        $board = array_reverse($this->board);
-        foreach ($board as $row) {
-            echo '<tr>';
-            foreach ($row as $col) {
-                echo '<td>' . $col . '</td>';
+        $return = '';
+        $return .= 'Player ' . $this->player;
+        $return .= '<table>';
+        for ($r = 0; $r < 6; $r++) {
+            $return .= '<tr>';
+            for ($c = 0; $c < 7; $c++) {
+                $return .= '<td>' . $this->board[$c][$r] . '</td>';
             }
-            echo '</tr>';
+            $return .= '</tr>';
         }
-        echo '</table>';
+        $return .= '</table>';
+        echo $return;
     }
 
     private function calculate_move() {
-        $this->full_cols();
+        $current_move = $this->calculate_current_move();
+        dbg('cm:' . $current_move);
+        if($current_move == 0) {
+            $this->valid_moves[3] = 3;
+        } else if($current_move == 1) {
+            $this->valid_moves[2] = 2;
+        } else {
+            $this->full_cols();
+        }
+    }
+
+    private function calculate_current_move() {
+        $m = 0;
+        for ($c = 0; $c < 7; $c++) {
+            for ($r = 0; $r < 6; $r++) {
+                $val = $this->board[$c][$r];
+                if((int)$val == (int)$this->player) {
+                    dbg('val:' . $val . ':' . $this->player . ':m:' . $m);
+                    $m++;
+                }
+            }
+        }
+        return $m;
     }
 
     private function full_cols() {
-        $board = $this->board;
-        $toprow = $board[count($board)-1];
-        foreach ($toprow as $col => $val) {
+        dbg('full_cols()');
+        for ($c = 0; $c < 7; $c++) {
+            $val = $this->board[$c][0];
+            dbg('col' . $c . '=' . $val);
             if($val == 0) {
-                $this->valid_moves[$col] = $val;
+                $this->valid_moves[$c] = $c;
             }
         }
     }

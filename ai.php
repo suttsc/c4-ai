@@ -114,6 +114,7 @@ class ai
             $this->valid_moves[2] = 2;
         } else {
             $this->full_cols();
+            $this->check_col();
         }
     }
 
@@ -139,6 +140,20 @@ class ai
             if($val == 0) {
                 $this->valid_moves[$c] = $c;
             }
+        }
+    }
+
+    private function check_col() {
+        foreach ($this->valid_moves as $c) {
+            $col = $this->board[$c];
+            $lowest = 9;
+            for($r = 0; $r < count($col); $r++) {
+                if($col[$r] != 0) {
+                    $lowest = $r;
+                    break;
+                }
+            }
+            //check position against rows/cols/diags for match
         }
     }
 }

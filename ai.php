@@ -6,17 +6,24 @@ function dbg($msg) {
     }
 }
 
+require_once('board.php');
+
 class ai
 {
-    //0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
-    static $testboard = [[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,1],[0,0,0,0,0,0],[0,0,0,0,0,0],[0,0,0,0,0,2]];
+    static $testboard = "[[1,2,1,2,0,0],[1,1,1,0,0,0],[0,0,0,0,0,0],[1,2,2,2,0,0],[2,0,0,0,0,0],[1,0,0,0,0,0],[2,0,0,0,0,0]]";
 
     public $gamestate;
     public $board = [];
 
     private $player = 0;
+    private $enemy = 0;
 
     private $valid_moves = [];
+
+    public function __construct()
+    {
+        $this->board = new board();
+    }
 
     private function get_gamestate() {
         if(!empty($_REQUEST['gamestate'])) {
@@ -29,7 +36,7 @@ class ai
         if(!empty($_REQUEST['player'])) {
             $this->player = $_REQUEST['player'];
         } else {
-            $this->player = $this->calculate_player();
+            $this->calculate_player();
         }
         dbg('is player ' . $this->player);
     }
@@ -37,37 +44,29 @@ class ai
     private function calculate_player() {
         $p1 = 0;
         $p2 = 0;
-        for ($c = 0; $c < 7; $c++) {
-            for ($r = 0; $r < 6; $r++) {
-                $val = (int)$this->gamestate[$c][$r];
+        for ($c = 0; $c < $this->board->cols(); $c++) {
+            for ($r = 0; $r < $this->board->rows(); $r++) {
+                $val = (int)$this->board->get()[$c][$r];
                 if($val == 1) $p1++;
                 else if($val == 2) $p2++;
             }
         }
-        if($p1 > $p2) return 2;
-        else return 1;
+        if($p1 > $p2) {
+            $this->player = 2;
+            $this->enemy = 1;
+        } else {
+            $this->player = 1;
+            $this->enemy = 2;
+        }
     }
 
-    private function parse_gamestate() {
-        $gs = $this->gamestate;
-
-        $gs = trim($gs, '[]');
-        dbg('parsed:' .$gs);
-        $cols = explode('],[', $gs);
-        $result = [];
-        foreach ($cols as $c => $col) {
-            $rows = explode(',', $col);
-            foreach ($rows as $r => $val) {
-                $result[(int)$c][(int)$r] = (int)$val;
-            }
-        }
-        dbg('result:<pre>' . print_r($result, 'r') . '</pre>');
-        $this->board = $result;
+    private function create_board() {
+        $this->board->set($this->gamestate);
     }
 
     private function set_gamestate() {
         $this->get_gamestate();
-        $this->parse_gamestate();
+        $this->create_board();
     }
 
     public function go() {
@@ -82,21 +81,32 @@ class ai
 
     private function return_move() {
         dbg('valid moves<pre>' . print_r($this->valid_moves, 'r') . '</pre>');
-        $rand = rand(0,count($this->valid_moves)-1);
+        $high = 0;
+        $final_moves = [];
+        foreach ($this->valid_moves as $c => $h) {
+            if($h > $high) {
+                $high = $h;
+                $final_moves = [$c];
+            } else if($h == $high) {
+                $final_moves[] = $c;
+            }
+        }
+
+        $rand = rand(0,count($final_moves)-1);
         dbg('random number:' . $rand);
-        $valid_moves = array_keys($this->valid_moves);
-        dbg('valid moves key<pre>' . print_r($valid_moves, 'r') . '</pre>');
-        dbg('valid_moves:' . implode(',', $valid_moves));
-        echo array_keys($this->valid_moves)[$rand];
+        //$final_moves = array_keys($final_moves);
+        dbg('valid moves key<pre>' . print_r($final_moves, 'r') . '</pre>');
+        dbg('valid_moves:' . implode(',', $final_moves));
+        echo $final_moves[$rand];
     }
 
     private function visualise_board() {
         $return = '';
         $return .= 'Player ' . $this->player;
         $return .= '<table>';
-        for ($r = 0; $r < 6; $r++) {
+        for ($r = 0; $r < $this->board->rows(); $r++) {
             $return .= '<tr>';
-            for ($c = 0; $c < 7; $c++) {
+            for ($c = 0; $c < $this->board->cols(); $c++) {
                 $return .= '<td>' . $this->board[$c][$r] . '</td>';
             }
             $return .= '</tr>';
@@ -111,18 +121,18 @@ class ai
         if($current_move == 0) {
             $this->valid_moves[3] = 3;
         } else if($current_move == 1) {
-            $this->valid_moves[2] = 2;
+            $this->valid_moves[3] = 3;
         } else {
-            $this->full_cols();
+            $this->set_valid_moves();
             $this->check_col();
         }
     }
 
     private function calculate_current_move() {
         $m = 0;
-        for ($c = 0; $c < 7; $c++) {
-            for ($r = 0; $r < 6; $r++) {
-                $val = $this->board[$c][$r];
+        for ($c = 0; $c < $this->board->cols(); $c++) {
+            for ($r = 0; $r < $this->board->rows(); $r++) {
+                $val = $this->board->get()[$c][$r];
                 if((int)$val == (int)$this->player) {
                     dbg('val:' . $val . ':' . $this->player . ':m:' . $m);
                     $m++;
@@ -132,21 +142,33 @@ class ai
         return $m;
     }
 
-    private function full_cols() {
+    private function set_valid_moves() {
         dbg('full_cols()');
-        for ($c = 0; $c < 7; $c++) {
-            $val = $this->board[$c][0];
+        for ($c = 0; $c < $this->board->cols(); $c++) {
+            $val = $this->board->get()[$c][$this->board->rows()-1];
             dbg('col' . $c . '=' . $val);
             if($val == 0) {
-                $this->valid_moves[$c] = $c;
+                $this->valid_moves[$c] = 1;
             }
         }
     }
 
     private function check_col() {
-        foreach ($this->valid_moves as $c) {
-            $col = $this->board[$c];
-            $lowest = 9;
+        $moves = $this->board->check_cols($this->player);
+        if(!empty($moves)) {
+            foreach ($moves as $c => $goodness) {
+                $this->valid_moves[$c] += $goodness;
+            }
+        }
+        $moves = $this->board->check_cols($this->enemy);
+        if(!empty($moves)) {
+            foreach ($moves as $c => $badness) {
+                $this->valid_moves[$c] += $badness;
+            }
+        }
+        /*foreach ($this->valid_moves as $c) {
+            $col = $this->board->get()[$c];
+            $lowest = 999999999;
             for($r = 0; $r < count($col); $r++) {
                 if($col[$r] != 0) {
                     $lowest = $r;
@@ -154,6 +176,6 @@ class ai
                 }
             }
             //check position against rows/cols/diags for match
-        }
+        }*/
     }
 }
